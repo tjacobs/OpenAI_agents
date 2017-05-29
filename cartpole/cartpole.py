@@ -56,7 +56,7 @@ def train(submit):
     # Start cartpole
     env = gym.make('CartPole-v0')
     if submit:
-        env = gym.wrappers.Monitor(env, 'cartpole', force=True)
+        env = gym.wrappers.Monitor(env, 'run-cartpole', force=True)
 
     # Keep results
     results = []
@@ -119,7 +119,7 @@ for t in range(10):
         if len(results) < 120:
             print("Uploading to gym...")
             gym.scoreboard.api_key = api_key.api_key
-            gym.upload('cartpole')
+            gym.upload('run-cartpole')
             break
 
     else:

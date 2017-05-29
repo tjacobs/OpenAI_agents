@@ -121,7 +121,7 @@ def run_episode(env, policy_grad, value_grad, sess, render=False):
 
 # Go
 env = gym.make('CartPole-v0')
-env = gym.wrappers.Monitor(env, 'cartpole', force=True)
+env = gym.wrappers.Monitor(env, 'run-cartpole', force=True)
 policy_grad = policy_gradient()
 value_grad = value_gradient()
 sess = tf.InteractiveSession()
@@ -150,7 +150,7 @@ if submit and t/100 > 195:
     print("Submitting to gym...")
     gym.scoreboard.api_key = api_key.api_key
     env.close()
-    gym.upload('cartpole')
+    gym.upload('run-cartpole')
 else:
     # Plot
     #plt.plot(results)
