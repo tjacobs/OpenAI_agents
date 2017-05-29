@@ -107,7 +107,7 @@ def train(env):
         # One more result
         results.append(reward)
 
-        if( (mutation_amount * 100) % 10 == 0):
+        if( (mutation_amount * 100) % 10 == 9):
             print('Mutation amount: %.2f.' % (mutation_amount))
 
         # Did this one do better?            
