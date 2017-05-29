@@ -2,20 +2,21 @@
 # By Tom Jacobs
 # 
 # Two methods:
-# 1. Random: It just tries random parameters, and picks the first one that gets a 200 score.
-# 2. Mutation: It starts with random parameters, and adds a 50% mutation on the best parameters found, each time.
+# 1. Random: Tries random parameters, and picks the first one that gets a 200 score.
+# 2. Mutation (Hill Climbing): Starts with random parameters, and adds a % mutation on the best parameters found.
+#                              Mutation amount decays each episode until 0.
 #
 # Runs on Python 3.
 # Originally based on https://github.com/kvfrans/openai-cartpole
 # You can submit it to the OpenAI Gym scoreboard by entering your OpenAI API key into api_key.py and enabling submit below.
 
 # Method to use?
-method = 2
+method = 1
 
 # Tunable params for method 2
 episodes_per_update = 20 # Try each mutation with 20 episodes
-mutation_amount = 1.0    # 100% random to start with
-mutation_decay = 0.01    # How much we reduce mutation_amount by, each run
+mutation_amount = 1.0    # 100% random mutations each episode to start with
+mutation_decay = 0.01    # How much we reduce mutation_amount by, each episode
 
 # Submit it?
 submit = True
@@ -33,7 +34,7 @@ def run_episode(env, parameters):
     total_reward = 0
     for t in range(200):
 
-        # Show us what's going on. Comment this line out to run super fast. The monitor will still render some random ones though for video recording, even if render is off.
+        # Render. Uncomment this line to see each episode.
 #        env.render()
 
         # Pick action
@@ -104,7 +105,7 @@ def train(submit):
     for t in range(100):
         reward = run_episode(env, best_parameters)
         results.append(reward)
-#        print( "Episode " + str(t) )
+        #print( "Episode " + str(t) )
 
     # Done
     return results
@@ -117,7 +118,7 @@ for t in range(10):
         print("Number of episodes run: {}".format(len(results)))
         if len(results) < 120:
             print("Uploading to gym...")
-            gym.scoreboard.api_key = api_key
+            gym.scoreboard.api_key = api_key.api_key
             gym.upload('cartpole')
             break
 
