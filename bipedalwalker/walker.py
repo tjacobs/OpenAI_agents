@@ -34,7 +34,7 @@ def run_episode(env, parameters, render=False):
     for t in range(10000):
 
         # Hack to flip the bot the fl*p out and end the env if we're stuck, otherwise Monitor freaks out
-        if total_reward < 0 and t > 500:
+        if total_reward < 0 and t > 200:
             parameters[0] = 1
             parameters[1] = 1
             parameters[2] = 0
@@ -86,8 +86,8 @@ def train(env):
     # Additional for method 2, start off with random parameters
     best_parameters = np.random.rand(13) * 2 - 1
 
-    # Try 500 episodes
-    for t in range(500):
+    # Try some episodes
+    for t in range(100):
 
         # Pick random parameters and run
         if method == 1:
@@ -107,7 +107,7 @@ def train(env):
         # One more result
         results.append(reward)
 
-        if( t % 50 == 0):
+        if( (mutation_amount * 100) % 10 == 0):
             print('Mutation amount: %.2f.' % (mutation_amount))
 
         # Did this one do better?            
@@ -117,7 +117,7 @@ def train(env):
             print("Better parameters found! Best reward so far: %d" % best_reward)
 
             # And did we win the world?
-            if reward >= 300:
+            if reward >= 100:
                 print("Win! Episode {}".format(t+1))
                 break 
 
@@ -133,13 +133,13 @@ if submit:
 # Try 10 times for a quick learn
 best_best_parameters = None
 best_best_reward = -1000
-for t in range(3):
+for t in range(10):
     print('\nTraining.')
 
-    episodes_per_update = 1   # Try each mutation with a few episodes
-    mutation_amount = 1.0     # Random mutations each episode to start with
-    mutation_decay = 0.001    # How much we reduce mutation_amount by, each episode
-    mutation_min = 0.02       # Keep mutating at the end by this much
+    episodes_per_update = 1  # Try each mutation with a few episodes
+    mutation_amount = 1.0    # Random mutations each episode to start with
+    mutation_decay = 0.01    # How much we reduce mutation_amount by, each episode
+    mutation_min = 0.01      # Keep mutating at the end by this much
 
     results, parameters, best_reward = train(env)
     if best_reward > best_best_reward:
@@ -151,7 +151,7 @@ print('We ended up running like this. Best best reward: %d' % best_best_reward )
 reward = run_episode(env, best_best_parameters, True)
 
 # Submit
-if submit and reward > 100:
+if submit and best_best_reward > 100:
         # Run 100 runs with the best found params
         print("Found best_best_parameters, running 100 more episodes with them.")
         for t in range(100):
