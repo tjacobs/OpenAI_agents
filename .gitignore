@@ -4,3 +4,4 @@
 api_key.py
 
 cartpole/run*/
+bipedalwalker/run*/
