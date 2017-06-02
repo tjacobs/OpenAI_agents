@@ -17,7 +17,7 @@ NUM_PARAMETERS = 5
 def run_episode(env, parameters, render=False):
     observation = env.reset()
 
-    SPEED = 0.9 + parameters[0]/5
+    SPEED = 0.4 + parameters[0]/5
     SUPPORT_KNEE_ANGLE = 0.1
 
     # Action to take
@@ -34,13 +34,13 @@ def run_episode(env, parameters, render=False):
 
     for t in range(10000):
 
-        # Render. Uncomment this line to see each episode.
-        if render:
-            env.render()
-
         # Step
         s, r, done, info = env.step(a)
         total_reward += r
+
+        # Render
+        if render:
+            env.render()
 
         # Display
         if False: #steps % 20 == 0 or done:
@@ -55,39 +55,49 @@ def run_episode(env, parameters, render=False):
         contact0 = s[8]
         contact1 = s[13]
 
-        # Which indexes are the angles for the legs
-        moving_s_base = 4 + 5*moving_leg
+        # Which indicies are the angles for the legs
+        moving_s_base     = 4 + 5*moving_leg
         supporting_s_base = 4 + 5*supporting_leg
 
         # Targets
-        hip_targ  = [None, None]   # -0.8 .. +1.1
-        knee_targ = [None, None]   # -0.6 .. +0.9
+        hip_target  = [None, None]   # -0.8 .. +1.1
+        knee_target = [None, None]   # -0.6 .. +0.9
+
+        # ?
         hip_todo  = [0.0, 0.0]
         knee_todo = [0.0, 0.0]
 
         # State to target mapping
         if state==STEP_BACK:
             if s[2] < -0.2:
-                knee_targ[moving_leg] = 1.5
+                hip_target[moving_leg] = 1.0
+                knee_target[moving_leg] = 1.0
             if s[2] > 0.01:
                 print( "We're ok now.")
                 state = STAY_ON_ONE_LEG
 
         if state==STEP_FORWARDS:
             if s[2] > 0.5:
-                knee_targ[moving_leg] = 1.5
+                pass
             if s[2] < 0.01:
                 print( "We're ok now.")
                 state = STAY_ON_ONE_LEG
 
         if state==STAY_ON_ONE_LEG:
-            hip_targ[moving_leg]  = 1.1
-            knee_targ[moving_leg] = -0.6
-            supporting_knee_angle += 0.03
-            if s[2] > SPEED: supporting_knee_angle += 0.03
+            # Move moving leg
+            hip_target[moving_leg]  = 1.1
+            knee_target[moving_leg] = -0.6
+            supporting_knee_angle += 0.04
+
+            # Bolt forward if falling forward
+            if s[2] > SPEED: supporting_knee_angle += 0.09
+
+            # Angle knee of supporting leg
             supporting_knee_angle = min( supporting_knee_angle, SUPPORT_KNEE_ANGLE )
-            knee_targ[supporting_leg] = supporting_knee_angle
-            if s[supporting_s_base+0] < 0.10: # supporting leg is behind
+            knee_target[supporting_leg] = supporting_knee_angle
+
+            # If the supporting leg is way behind now, let's go!
+            if s[supporting_s_base] < 0.10: 
                 state = PUT_OTHER_DOWN
 
             # Oop, are we falling backwards?
@@ -100,29 +110,30 @@ def run_episode(env, parameters, render=False):
             if s[2] > 0.5:
                 print( "Falling forwards. {}".format(s[2]))
                 render = True
-                state = STEP_FORWARDS
+#                state = STEP_FORWARDS
 
         if state==PUT_OTHER_DOWN:
-            hip_targ[moving_leg]  = +0.1
-            knee_targ[moving_leg] = SUPPORT_KNEE_ANGLE
-            knee_targ[supporting_leg] = supporting_knee_angle
+            hip_target[moving_leg]      = 0.1
+            knee_target[moving_leg]     = SUPPORT_KNEE_ANGLE
+            knee_target[supporting_leg] = supporting_knee_angle
             if s[moving_s_base+4]:
                 state = PUSH_OFF
                 supporting_knee_angle = min( s[moving_s_base+2], SUPPORT_KNEE_ANGLE )
+
         if state==PUSH_OFF:
-            knee_targ[moving_leg] = supporting_knee_angle
-            knee_targ[supporting_leg] = +1.0
+            knee_target[moving_leg] = supporting_knee_angle
+            knee_target[supporting_leg] = +1.0
             if s[supporting_s_base+2] > 0.88 + parameters[1]/5 or s[2] > 1.2*SPEED*parameters[2]/5:
                 state = STAY_ON_ONE_LEG
                 moving_leg = 1 - moving_leg
                 supporting_leg = 1 - moving_leg
 
+        # ?
+        if hip_target[0]: hip_todo[0] = (parameters[3]/5 + 0.9)*(hip_target[0] - s[4]) - 0.25*s[5]
+        if hip_target[1]: hip_todo[1] = (parameters[3]/5 + 0.9)*(hip_target[1] - s[9]) - 0.25*s[10]
 
-        if hip_targ[0]: hip_todo[0] = (parameters[3]/5 + 0.9)*(hip_targ[0] - s[4]) - 0.25*s[5]
-        if hip_targ[1]: hip_todo[1] = (parameters[3]/5 + 0.9)*(hip_targ[1] - s[9]) - 0.25*s[10]
-
-        if knee_targ[0]: knee_todo[0] = (parameters[4]/5 + 4.0)*(knee_targ[0] - s[6])  - 0.25*s[7]
-        if knee_targ[1]: knee_todo[1] = (parameters[4]/5 + 4.0)*(knee_targ[1] - s[11]) - 0.25*s[12]
+        if knee_target[0]: knee_todo[0] = (parameters[4]/5 + 4.0)*(knee_target[0] - s[6])  - 0.25*s[7]
+        if knee_target[1]: knee_todo[1] = (parameters[4]/5 + 4.0)*(knee_target[1] - s[11]) - 0.25*s[12]
 
         hip_todo[0] -= 0.9*(0-s[0]) - 1.5*s[1] # PID to keep body straight
         hip_todo[1] -= 0.9*(0-s[0]) - 1.5*s[1]
@@ -151,7 +162,7 @@ def train(env, best_parameters):
 
     # Try some episodes
     for t in range(10):
-
+        # Try new paremeters
         new_parameters = best_parameters + (np.random.rand(NUM_PARAMETERS) * 2 - 1) * mutation_amount
         mutation_amount = max(mutation_min, mutation_amount - mutation_decay)
         reward = 0
@@ -172,7 +183,7 @@ def train(env, best_parameters):
         if reward > best_reward:
             best_reward = reward
             best_parameters = new_parameters
-            print("Better parameters found! Best reward so far: %d" % best_reward)
+            print("Better parameters found. Best reward so far: %d" % best_reward)
 
             # And did we win the world?
             if reward >= 300:
