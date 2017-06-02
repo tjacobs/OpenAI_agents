@@ -15,8 +15,8 @@ import math
 def run_episode(env, parameters, render=False):
     observation = env.reset()
 
-    SPEED = 0.5 * (parameters[0])/5 # +/- 20%
-    SUPPORT_KNEE_ANGLE = 0.1 * (parameters[1])/10 # +/- 10%
+    SPEED = 0.4 + parameters[0]/10
+    SUPPORT_KNEE_ANGLE = 0.1
 
     # Action to take
     a = np.array([0.0, 0.0, 0.0, 0.0])
@@ -36,8 +36,11 @@ def run_episode(env, parameters, render=False):
         if render:
             env.render()
 
+        # Step
         s, r, done, info = env.step(a)
         total_reward += r
+
+        # Display
         if False: #steps % 20 == 0 or done:
             print("\naction " + str(["{:+0.2f}".format(x) for x in a]))
             print("step {} total_reward {:+0.2f}".format(steps, total_reward))
@@ -49,6 +52,8 @@ def run_episode(env, parameters, render=False):
         # Foot touched the ground?
         contact0 = s[8]
         contact1 = s[13]
+
+        # ?
         moving_s_base = 4 + 5*moving_leg
         supporting_s_base = 4 + 5*supporting_leg
 
@@ -78,7 +83,7 @@ def run_episode(env, parameters, render=False):
         if state==PUSH_OFF:
             knee_targ[moving_leg] = supporting_knee_angle
             knee_targ[supporting_leg] = +1.0
-            if s[supporting_s_base+2] > 0.88 or s[2] > 1.2*SPEED:
+            if s[supporting_s_base+2] > 0.88 + parameters[1]/5 or s[2] > 1.2*SPEED*parameters[2]/5:
                 state = STAY_ON_ONE_LEG
                 moving_leg = 1 - moving_leg
                 supporting_leg = 1 - moving_leg
@@ -107,15 +112,17 @@ def run_episode(env, parameters, render=False):
 def train(env):
     global mutation_amount
 
+    NUM_PARAMETERS = 4
+
     # Keep results
     results = []
     best_reward = -100 # Do better than falling down
-    best_parameters = np.random.rand(2) * 2 - 1
+    best_parameters = np.random.rand(NUM_PARAMETERS) * 2 - 1
 
     # Try some episodes
     for t in range(100):
 
-        new_parameters = best_parameters + (np.random.rand(2) * 2 - 1) * mutation_amount
+        new_parameters = best_parameters + (np.random.rand(NUM_PARAMETERS) * 2 - 1) * mutation_amount
         mutation_amount = max(mutation_min, mutation_amount - mutation_decay)
         reward = 0
         for e in range(episodes_per_update):
@@ -126,7 +133,8 @@ def train(env):
         # One more result
         results.append(reward)
 
-        if int(mutation_amount * 100) % 10 == 0:
+        # Display
+        if int(mutation_amount * 100) % 10 == 9:
             print('Mutation amount: %.2f.' % (mutation_amount))
 
         # Did this one do better?            
@@ -154,9 +162,9 @@ best_best_reward = -100
 for t in range(3):
     print('\nTraining.')
 
-    episodes_per_update = 2  # Try each mutation with a few episodes
+    episodes_per_update = 1  # Try each mutation with a few episodes
     mutation_amount = 1.0    # Random mutations each episode to start with
-    mutation_decay = 0.01    # How much we reduce mutation_amount by, each episode
+    mutation_decay = 0.025    # How much we reduce mutation_amount by, each episode
     mutation_min = 0.01      # Keep mutating at the end by this much
 
     results, parameters, best_reward = train(env)
@@ -165,7 +173,7 @@ for t in range(3):
         best_best_reward = best_reward
 
 # Run odd looking Forest, run
-print('We ended up running like this. Parameters: %.2f, %.2f. Best best reward: %d' % (parameters[0], parameters[1], best_best_reward) )
+print('We ended up running like this. Parameters: %.2f, %.2f. Best best reward: %d' % (best_best_parameters[0], best_best_parameters[1], best_best_reward) )
 reward = run_episode(env, best_best_parameters, True)
 
 # Submit
