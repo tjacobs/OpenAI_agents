@@ -63,7 +63,7 @@ def run_episode(env, parameters, render=False):
         hip_target  = [None, None]   # -0.8 .. +1.1
         knee_target = [None, None]   # -0.6 .. +0.9
 
-        # ?
+        # What actions should we take
         hip_todo  = [0.0, 0.0]
         knee_todo = [0.0, 0.0]
 
@@ -72,7 +72,8 @@ def run_episode(env, parameters, render=False):
             if s[2] < -0.2:
                 hip_target[moving_leg] = 1.0
                 knee_target[moving_leg] = 1.0
-            if s[2] > 0.01:
+
+            if s[2] > 0.1:
                 print( "We're ok now.")
                 state = STAY_ON_ONE_LEG
 
@@ -85,19 +86,19 @@ def run_episode(env, parameters, render=False):
 
         if state==STAY_ON_ONE_LEG:
             # Move moving leg
-            hip_target[moving_leg]  = 1.1
-            knee_target[moving_leg] = -0.6
+            hip_target[moving_leg]  = 1.2
+            knee_target[moving_leg] = -0.7
             supporting_knee_angle += 0.04
 
             # Bolt forward if falling forward
-            if s[2] > SPEED: supporting_knee_angle += 0.09
+            if s[2] > SPEED: supporting_knee_angle += 0.10
 
             # Angle knee of supporting leg
             supporting_knee_angle = min( supporting_knee_angle, SUPPORT_KNEE_ANGLE )
             knee_target[supporting_leg] = supporting_knee_angle
 
             # If the supporting leg is way behind now, let's go!
-            if s[supporting_s_base] < 0.10: 
+            if s[supporting_s_base] < 0.20: 
                 state = PUT_OTHER_DOWN
 
             # Oop, are we falling backwards?
@@ -113,33 +114,40 @@ def run_episode(env, parameters, render=False):
 #                state = STEP_FORWARDS
 
         if state==PUT_OTHER_DOWN:
+            # Put our foot down. Moving leg now becomes supporting leg.
             hip_target[moving_leg]      = 0.1
             knee_target[moving_leg]     = SUPPORT_KNEE_ANGLE
             knee_target[supporting_leg] = supporting_knee_angle
+
+            # When it's time, push off
             if s[moving_s_base+4]:
                 state = PUSH_OFF
                 supporting_knee_angle = min( s[moving_s_base+2], SUPPORT_KNEE_ANGLE )
 
         if state==PUSH_OFF:
+            # Just bounce
             knee_target[moving_leg] = supporting_knee_angle
-            knee_target[supporting_leg] = +1.0
+            knee_target[supporting_leg] = 1.0
+
+            # Did we bounce?
             if s[supporting_s_base+2] > 0.88 + parameters[1]/5 or s[2] > 1.2*SPEED*parameters[2]/5:
                 state = STAY_ON_ONE_LEG
                 moving_leg = 1 - moving_leg
                 supporting_leg = 1 - moving_leg
 
-        # ?
-        if hip_target[0]: hip_todo[0] = (parameters[3]/5 + 0.9)*(hip_target[0] - s[4]) - 0.25*s[5]
-        if hip_target[1]: hip_todo[1] = (parameters[3]/5 + 0.9)*(hip_target[1] - s[9]) - 0.25*s[10]
+        # Calculate movements to move towards targets
+        if hip_target[0]:  hip_todo[0]  = (parameters[3]/5 + 0.9) * (hip_target[0]  - s[4])  - 0.25*s[5]
+        if hip_target[1]:  hip_todo[1]  = (parameters[3]/5 + 0.9) * (hip_target[1]  - s[9])  - 0.25*s[10]
+        if knee_target[0]: knee_todo[0] = (parameters[4]/5 + 4.0) * (knee_target[0] - s[6])  - 0.25*s[7]
+        if knee_target[1]: knee_todo[1] = (parameters[4]/5 + 4.0) * (knee_target[1] - s[11]) - 0.25*s[12]
 
-        if knee_target[0]: knee_todo[0] = (parameters[4]/5 + 4.0)*(knee_target[0] - s[6])  - 0.25*s[7]
-        if knee_target[1]: knee_todo[1] = (parameters[4]/5 + 4.0)*(knee_target[1] - s[11]) - 0.25*s[12]
+        # Adjust movement to stand up straight
+        hip_todo[0] += 0.9 * s[0] + 1.5 * s[1]
+        hip_todo[1] += 0.9 * s[0] + 1.5 * s[1]
 
-        hip_todo[0] -= 0.9*(0-s[0]) - 1.5*s[1] # PID to keep body straight
-        hip_todo[1] -= 0.9*(0-s[0]) - 1.5*s[1]
-
-        knee_todo[0] -= 15.0*s[3]  # vertical speed, to damp oscillations
-        knee_todo[1] -= 15.0*s[3]
+        # Adjust knee according to vertical speed, to damp bouncy oscillations
+        knee_todo[0] -= 5.0 * s[3]      
+        knee_todo[1] -= 5.0 * s[3]
 
         # Set action for next frame
         a[0] = hip_todo[0]
@@ -161,13 +169,13 @@ def train(env, best_parameters):
     best_reward = -100 # Do better than falling down
 
     # Try some episodes
-    for t in range(10):
+    for t in range(1):
         # Try new paremeters
         new_parameters = best_parameters + (np.random.rand(NUM_PARAMETERS) * 2 - 1) * mutation_amount
         mutation_amount = max(mutation_min, mutation_amount - mutation_decay)
         reward = 0
         for e in range(episodes_per_update):
-             run = run_episode(env, new_parameters, False)
+             run = run_episode(env, new_parameters, not submit)
              reward += run
         reward /= episodes_per_update
 
