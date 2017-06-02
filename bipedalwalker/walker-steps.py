@@ -17,7 +17,7 @@ NUM_PARAMETERS = 5
 def run_episode(env, parameters, render=False):
     observation = env.reset()
 
-    SPEED = 0.4 + parameters[0]/5
+    SPEED = 0.9 + parameters[0]/5
     SUPPORT_KNEE_ANGLE = 0.1
 
     # Action to take
@@ -26,7 +26,7 @@ def run_episode(env, parameters, render=False):
     total_reward = 0
 
     # States
-    STAY_ON_ONE_LEG, PUT_OTHER_DOWN, PUSH_OFF = 1, 2, 3
+    STAY_ON_ONE_LEG, PUT_OTHER_DOWN, PUSH_OFF, STEP_BACK, STEP_FORWARDS = 1, 2, 3, 4, 5
     state = STAY_ON_ONE_LEG
     moving_leg = 0
     supporting_leg = 1 - moving_leg
@@ -55,7 +55,7 @@ def run_episode(env, parameters, render=False):
         contact0 = s[8]
         contact1 = s[13]
 
-        # ?
+        # Which indexes are the angles for the legs
         moving_s_base = 4 + 5*moving_leg
         supporting_s_base = 4 + 5*supporting_leg
 
@@ -66,6 +66,20 @@ def run_episode(env, parameters, render=False):
         knee_todo = [0.0, 0.0]
 
         # State to target mapping
+        if state==STEP_BACK:
+            if s[2] < -0.2:
+                knee_targ[moving_leg] = 1.5
+            if s[2] > 0.01:
+                print( "We're ok now.")
+                state = STAY_ON_ONE_LEG
+
+        if state==STEP_FORWARDS:
+            if s[2] > 0.5:
+                knee_targ[moving_leg] = 1.5
+            if s[2] < 0.01:
+                print( "We're ok now.")
+                state = STAY_ON_ONE_LEG
+
         if state==STAY_ON_ONE_LEG:
             hip_targ[moving_leg]  = 1.1
             knee_targ[moving_leg] = -0.6
@@ -75,6 +89,19 @@ def run_episode(env, parameters, render=False):
             knee_targ[supporting_leg] = supporting_knee_angle
             if s[supporting_s_base+0] < 0.10: # supporting leg is behind
                 state = PUT_OTHER_DOWN
+
+            # Oop, are we falling backwards?
+            if s[2] < -0.2:
+                print( "Falling backwards.")
+                render = True
+                state = STEP_BACK
+
+            # Oop, are we falling forwards?
+            if s[2] > 0.5:
+                print( "Falling forwards. {}".format(s[2]))
+                render = True
+                state = STEP_FORWARDS
+
         if state==PUT_OTHER_DOWN:
             hip_targ[moving_leg]  = +0.1
             knee_targ[moving_leg] = SUPPORT_KNEE_ANGLE
@@ -164,10 +191,10 @@ if submit:
 # Record the best of the best
 best_best_parameters = np.random.rand(NUM_PARAMETERS) * 2 - 1
 best_best_reward = -100
-for t in range(10):
-    print('\nTraining run {}/10'.format(t+1))
+for t in range(2):
+    print('\nTraining run {}/2'.format(t+1))
 
-    episodes_per_update = 10  # Try each mutation with a few episodes
+    episodes_per_update = 1  # Try each mutation with a few episodes
     mutation_amount = 0.1    # Random mutations each episode to start with
     mutation_decay = 0.01    # How much we reduce mutation_amount by, each episode
     mutation_min = 0.01      # Keep mutating at the end by this much
