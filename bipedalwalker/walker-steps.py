@@ -4,7 +4,7 @@
 # You can submit it to the OpenAI Gym scoreboard by entering your OpenAI API key into api_key.py and enabling submit below.
 
 # Submit it?
-submit = True
+submit = False
 import api_key
 
 # Imports
@@ -12,10 +12,12 @@ import gym
 import numpy as np
 import math
 
+NUM_PARAMETERS = 5
+
 def run_episode(env, parameters, render=False):
     observation = env.reset()
 
-    SPEED = 0.4 + parameters[0]/10
+    SPEED = 0.4 + parameters[0]/5
     SUPPORT_KNEE_ANGLE = 0.1
 
     # Action to take
@@ -88,16 +90,20 @@ def run_episode(env, parameters, render=False):
                 moving_leg = 1 - moving_leg
                 supporting_leg = 1 - moving_leg
 
-        if hip_targ[0]: hip_todo[0] = 0.9*(hip_targ[0] - s[4]) - 0.25*s[5]
-        if hip_targ[1]: hip_todo[1] = 0.9*(hip_targ[1] - s[9]) - 0.25*s[10]
-        if knee_targ[0]: knee_todo[0] = 4.0*(knee_targ[0] - s[6])  - 0.25*s[7]
-        if knee_targ[1]: knee_todo[1] = 4.0*(knee_targ[1] - s[11]) - 0.25*s[12]
 
-        hip_todo[0] -= 0.9*(0-s[0]) - 1.5*s[1] # PID to keep head straight
+        if hip_targ[0]: hip_todo[0] = (parameters[3]/5 + 0.9)*(hip_targ[0] - s[4]) - 0.25*s[5]
+        if hip_targ[1]: hip_todo[1] = (parameters[3]/5 + 0.9)*(hip_targ[1] - s[9]) - 0.25*s[10]
+
+        if knee_targ[0]: knee_todo[0] = (parameters[4]/5 + 4.0)*(knee_targ[0] - s[6])  - 0.25*s[7]
+        if knee_targ[1]: knee_todo[1] = (parameters[4]/5 + 4.0)*(knee_targ[1] - s[11]) - 0.25*s[12]
+
+        hip_todo[0] -= 0.9*(0-s[0]) - 1.5*s[1] # PID to keep body straight
         hip_todo[1] -= 0.9*(0-s[0]) - 1.5*s[1]
+
         knee_todo[0] -= 15.0*s[3]  # vertical speed, to damp oscillations
         knee_todo[1] -= 15.0*s[3]
 
+        # Set action for next frame
         a[0] = hip_todo[0]
         a[1] = knee_todo[0]
         a[2] = hip_todo[1]
@@ -109,24 +115,21 @@ def run_episode(env, parameters, render=False):
             break
     return total_reward
 
-def train(env):
+def train(env, best_parameters):
     global mutation_amount
-
-    NUM_PARAMETERS = 4
 
     # Keep results
     results = []
     best_reward = -100 # Do better than falling down
-    best_parameters = np.random.rand(NUM_PARAMETERS) * 2 - 1
 
     # Try some episodes
-    for t in range(100):
+    for t in range(10):
 
         new_parameters = best_parameters + (np.random.rand(NUM_PARAMETERS) * 2 - 1) * mutation_amount
         mutation_amount = max(mutation_min, mutation_amount - mutation_decay)
         reward = 0
         for e in range(episodes_per_update):
-             run = run_episode(env, new_parameters)
+             run = run_episode(env, new_parameters, False)
              reward += run
         reward /= episodes_per_update
 
@@ -134,7 +137,8 @@ def train(env):
         results.append(reward)
 
         # Display
-        if int(mutation_amount * 100) % 10 == 9:
+        mutation_display = int(mutation_amount * 1000)
+        if mutation_display % 10 == 9 or mutation_display % 10 == 0:
             print('Mutation amount: %.2f.' % (mutation_amount))
 
         # Did this one do better?            
@@ -146,6 +150,7 @@ def train(env):
             # And did we win the world?
             if reward >= 300:
                 print("Win! Episode {}".format(t+1))
+                mutation_amount = 0.01
                 break 
 
     # Done
@@ -157,23 +162,23 @@ if submit:
     env = gym.wrappers.Monitor(env, 'run', force=True)
 
 # Record the best of the best
-best_best_parameters = None
+best_best_parameters = np.random.rand(NUM_PARAMETERS) * 2 - 1
 best_best_reward = -100
-for t in range(3):
-    print('\nTraining.')
+for t in range(10):
+    print('\nTraining run {}/10'.format(t+1))
 
-    episodes_per_update = 1  # Try each mutation with a few episodes
-    mutation_amount = 1.0    # Random mutations each episode to start with
-    mutation_decay = 0.025    # How much we reduce mutation_amount by, each episode
+    episodes_per_update = 10  # Try each mutation with a few episodes
+    mutation_amount = 0.1    # Random mutations each episode to start with
+    mutation_decay = 0.01    # How much we reduce mutation_amount by, each episode
     mutation_min = 0.01      # Keep mutating at the end by this much
 
-    results, parameters, best_reward = train(env)
+    results, parameters, best_reward = train(env, best_best_parameters)
     if best_reward > best_best_reward:
         best_best_parameters = parameters
         best_best_reward = best_reward
 
 # Run odd looking Forest, run
-print('We ended up running like this. Parameters: %.2f, %.2f. Best best reward: %d' % (best_best_parameters[0], best_best_parameters[1], best_best_reward) )
+print('We ended up running like this. Parameters: Speed: %.2fx, %.2f, %.2f, %.2f, %.2f. Best best reward: %d' % (best_best_parameters[0], best_best_parameters[1], best_best_parameters[2], best_best_parameters[3], best_best_parameters[4], best_best_reward) )
 reward = run_episode(env, best_best_parameters, True)
 
 # Submit
