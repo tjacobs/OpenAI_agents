@@ -4,7 +4,7 @@
 # You can submit it to the OpenAI Gym scoreboard by entering your OpenAI API key into api_key.py and enabling submit below.
 
 # Submit it?
-submit = False
+submit = True
 import api_key
 
 # Imports
@@ -73,7 +73,9 @@ def run_episode(env, parameters, render=False):
                 hip_target[moving_leg] = 1.0
                 knee_target[moving_leg] = 1.0
 
-            if s[2] > 0.1:
+            if s[2] > 0.01:
+                hip_target[moving_leg] = 0.0
+                knee_target[moving_leg] = 0.0
                 print( "We're ok now.")
                 state = STAY_ON_ONE_LEG
 
