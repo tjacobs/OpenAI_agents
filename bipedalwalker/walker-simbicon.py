@@ -23,91 +23,110 @@ def run_episode(env, parameters, render=False):
     # States
     LEFT_FOOT_STANCE, RIGHT_FOOT_DOWN, RIGHT_FOOT_STANCE, LEFT_FOOT_DOWN = 1, 2, 3, 4
     walk_state = LEFT_FOOT_STANCE
-    swing_leg   = 0
-    support_leg = 1
+    left_leg   = 0
+    right_leg = 1
 
     # Counts
     steps = 0
     total_reward = 0
+    time = 0
 
     # Loop
-    for t in range(10000):
+    for t in range(1000):
 
         # Render
         if render:
             env.render()
 
         # Which indicies are the angles for the legs
-        swing_hip_angle_index     = 4 + 5 * swing_leg
-        support_leg_hip_angle_index = 4 + 5 * support_leg
+        left_hip_angle_index      = 4
+        right_leg_hip_angle_index = 9
 
         # Targets
-        hip_target  = [None, None]   # Hips go   -0.8 to 1.1
+        hip_target  = [None, None]   # Hips go  -0.8 to 1.1
         knee_target = [None, None]   # Knees go -0.6 to 0.9
+
+        # Timer
+        time += 1
+        time_mod = time % 500
 
         # State to target mapping
         if walk_state == LEFT_FOOT_STANCE:
-            # Move swing leg
-            hip_target[swing_leg]   =  0.5
-            hip_target[support_leg] = -0.5
+            # Move left leg forward
+            hip_target[left_leg]  = 1.1
+            knee_target[left_leg] = -0.6
 
-#            hip_target[swing_leg]  = 1.1
-#            knee_target[swing_leg] = -0.6
+            hip_target[right_leg]  = -0.2
+            knee_target[right_leg] = -0.3
 
-            # Angle knee of support leg
-#            knee_target[support_leg] = 0.05
+            # Jump!
+            if time_mod > 100 and time_mod < 200:
+                knee_target[right_leg] = 0.15
+                knee_target[left_leg] = -0.15
 
-            # If the supporting leg is way behind now, let's go!
-            if state[support_leg_hip_angle_index] < 0.20: 
-#                print( "ok" )
-#                walk_state = LEFT_FOOT_DOWN
-                pass
+                # If both legs off the ground, go for the leg flip
+                if not state[8] and not state[13]:
+                    print( "Flip!" )
+                    walk_state = RIGHT_FOOT_STANCE
+                    time = 200
 
-        if walk_state == LEFT_FOOT_DOWN:
-            # Put our foot down. Moving leg now becomes supporting leg.
-            hip_target[swing_leg]    = 0.1
-            knee_target[swing_leg]   = 0.05
-            knee_target[support_leg] = 0.05
+        elif walk_state == RIGHT_FOOT_DOWN:
+            if state[8]:
+                print( "Right foot is down." )
+                walk_state = RIGHT_FOOT_STANCE
 
-            # If we have foot contact, go
-            if state[swing_hip_angle_index+4]:
-#                state = LEFT_FOOT_STANCE
-#                supporting_knee_angle = min( s[moving_s_base+2], SUPPORT_KNEE_ANGLE )
-                #print( "Touch" )
-                pass
+        elif walk_state == RIGHT_FOOT_STANCE:
+            # Move right leg forward
+            hip_target[right_leg]  = 1.1
+            knee_target[right_leg] = -0.6
 
-#        if walk_state==PUSH_OFF:
-#            # Just bounce
-#            knee_target[moving_leg] = supporting_knee_angle
-#            knee_target[supporting_leg] = 1.0
-#
-            # Did we bounce?
-#            if state[supporting_s_base+2] > 0.88 + parameters[1]/5 or s[2] > 1.2*SPEED*parameters[2]/5:
-#                walk_state = STAY_ON_ONE_LEG
-#                moving_leg = 1 - moving_leg
-#                supporting_leg = 1 - moving_leg
+            hip_target[left_leg]  = -0.2
+            knee_target[left_leg] = -0.3
+
+            # Jump!
+            if time_mod > 100 and time_mod < 200:
+                knee_target[left_leg] = 0.15
+                knee_target[right_leg] = -0.15
+
+                # If both legs off the ground, go for the leg flip
+                if not state[8] and not state[13]:
+                    print( "Flip!" )
+                    walk_state = LEFT_FOOT_STANCE
+                    time = 200
+
+        elif walk_state == LEFT_FOOT_DOWN:
+            if state[13]:
+                print( "Left foot is down." )
+                walk_state = LEFT_FOOT_STANCE
 
         # How should we move?
         hip_movement  = [0.0, 0.0]
         knee_movement = [0.0, 0.0]
 
-        # If we have ragets, use PD controller to move there. Kp*anglediff - Kd*velocity
-        if hip_target[0]:  hip_movement[0]  = 1.0 * (hip_target[0]  - state[4])  + 0.25 * state[5]
-        if knee_target[0]: knee_movement[0] = 1.0 * (knee_target[0] - state[6])  + 0.25 * state[7]
-        if hip_target[1]:  hip_movement[1]  = 1.0 * (hip_target[1]  - state[9])  + 0.25 * state[10]
-        if knee_target[1]: knee_movement[1] = 1.0 * (knee_target[1] - state[11]) + 0.25 * state[12]
+        # If we have targets, use PD controller to move them there. Kp * anglediff - Kd * velocity
+        Kp = 25.0
+        Kd = 0.1
+        hip_in_world_frame = (state[4] - state[0], state[9] - state[0])
+        hip_velocity_in_world_frame = (state[5] - state[1], state[10] - state[1])
+        if hip_target[0]:  hip_movement[0]  = Kp * (hip_target[0]  - hip_in_world_frame[0])  + Kd * hip_velocity_in_world_frame[0]
+        if knee_target[0]: knee_movement[0] = Kp * (knee_target[0] - state[6])               + Kd * state[7]
+        if hip_target[1]:  hip_movement[1]  = Kp * (hip_target[1]  - hip_in_world_frame[1])  + Kd * hip_velocity_in_world_frame[1]
+        if knee_target[1]: knee_movement[1] = Kp * (knee_target[1] - state[11])              + Kd * state[12]
 
-        # PD controller to adjust movement to keep balance up straight. Kp*body_angle + Kd*body_angle_velocity.
-        hip_movement[0] -= 1.0 * state[0] + 0.1 * state[1]
-        hip_movement[1] -= 1.0 * state[0] + 0.1 * state[1]
+        # Balance. PD controller to adjust hip in world frame to keep balance up straight. Kp * body_angle + Kd * body_angle_velocity.
+        kBalanceP = 50.0
+        kBalanceD = 5
+        hip_movement[0] += kBalanceP * state[0] + kBalanceD * state[1]
+        hip_movement[1] += kBalanceP * state[0] + kBalanceD * state[1]
 
-        # PD controller to adjust knee according to vertical speed, to dampen bouncy oscillations. Kd*body_vertical_velocity.
-        knee_movement[0] -= 0.1 + 1.0 * state[3]
-        knee_movement[1] -= 0.1 + 1.0 * state[3]
+        # Dampen bounce. PD controller to adjust knee according to vertical speed, to dampen bouncy oscillations. Kd*body_vertical_velocity.
+        knee_movement[0] -= 25.0 * state[3]
+        knee_movement[1] -= 25.0 * state[3]
 
         # Set action
         action = np.array([hip_movement[0], knee_movement[0], hip_movement[1], knee_movement[1]])
         action = np.clip(action, -1.0, 1.0)
+        #print( "Torques: Hip %0.2f Knee %0.2f      Hip %0.2f Knee %0.2f" % (action[0], action[1], action[2], action[3] ) )
 
         # Step
         state, reward, done, info = env.step(action)
@@ -115,8 +134,7 @@ def run_episode(env, parameters, render=False):
         steps += 1
 
         # Display
-        if False: #steps % 20 == 0 or done:
-            print("\nAction " + str(["{:+0.2f}".format(x) for x in action]))
+        if steps % 200 == 0 or done:
             print("Step {} total_reward {:+0.2f}".format(steps, total_reward))
             print("Hull " + str(["{:+0.2f}".format(x) for x in state[0:4] ]))
             print("Leg 0 " + str(["{:+0.2f}".format(x) for x in state[4:9] ]))
@@ -176,7 +194,7 @@ if submit:
 # Record the best of the best
 best_best_parameters = np.random.rand(NUM_PARAMETERS) * 2 - 1
 best_best_reward = -100
-for t in range(2):
+for t in range(1):
     print('\nTraining run {}/2'.format(t+1))
 
     episodes_per_update = 1  # Try each mutation with a few episodes
@@ -190,8 +208,8 @@ for t in range(2):
         best_best_reward = best_reward
 
 # Run odd looking Forest, run
-print('We ended up running like this. Parameters: Speed: %.2fx, %.2f, %.2f, %.2f, %.2f. Best best reward: %d' % (best_best_parameters[0], best_best_parameters[1], best_best_parameters[2], best_best_parameters[3], best_best_parameters[4], best_best_reward) )
-reward = run_episode(env, best_best_parameters, True)
+#print('We ended up running like this. Parameters: Speed: %.2fx, %.2f, %.2f, %.2f, %.2f. Best best reward: %d' % (best_best_parameters[0], best_best_parameters[1], best_best_parameters[2], best_best_parameters[3], best_best_parameters[4], best_best_reward) )
+#reward = run_episode(env, best_best_parameters, True)
 
 # Submit
 if submit and best_best_reward > 100:
